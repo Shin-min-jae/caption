@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>실시간 자막</title>
+<meta name="theme-color" content="#1a2030">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#10141c;color:#eef1f7;font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
+#app{height:100%;display:flex;flex-direction:column}
+#bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:10px 14px;background:#1a2030;border-bottom:1px solid #2c3550}
+#bar.hide{display:none}
+#show{display:none;position:fixed;top:8px;right:8px;z-index:20;padding:5px 10px;font-size:15px;opacity:.6}
+#show:hover,#show:focus-visible{opacity:1}
+#bar label{display:flex;align-items:center;gap:6px;font-size:14px;color:#b9c3dc}
+#bar select,#bar input[type=range]{accent-color:#5fd3a5}
+#bar select{background:#10141c;color:#eef1f7;border:1px solid #3a4568;border-radius:6px;padding:5px 8px;font-size:14px}
+button{background:#2a3350;color:#eef1f7;border:1px solid #3a4568;border-radius:8px;padding:8px 14px;font-size:14px;cursor:pointer}
+button:hover{background:#34406a}
+button[hidden]{display:none}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #5fd3a5;outline-offset:2px}
+#go{background:#1f8f68;border-color:#2fb384;font-weight:700}
+#go.on{background:#b3363f;border-color:#d4505a}
+#inst{border-color:#5fd3a5;color:#8fd9b8}
+#status{font-size:13px;color:#8fd9b8;margin-left:auto}
+#status.err{color:#ff9a9a}
+#stage{flex:1;position:relative;overflow:hidden}
+#stage .hint{position:absolute;inset:0;display:grid;place-items:center;color:#4b5678;font-size:15px;pointer-events:none;padding:20px;text-align:center}
+#cap{position:absolute;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;padding:14px 22px;background:var(--bg,#000);color:var(--fg,#fff);font-size:var(--fs,56px);line-height:1.35;font-weight:700;word-break:keep-all;overflow-wrap:anywhere}
+#cap.top{top:0;left:0;right:0;height:var(--sz,30%)}
+#cap.bottom{bottom:0;left:0;right:0;height:var(--sz,30%)}
+#cap.left{top:0;bottom:0;left:0;width:var(--sz,30%)}
+#cap.right{top:0;bottom:0;right:0;width:var(--sz,30%)}
+#cap.float{inset:0!important;width:auto!important;height:auto!important;padding:10px 16px}
+#cap p{margin:0 0 .35em}
+#cap .interim{opacity:.6}
+#warn{display:none;margin:0;padding:14px 16px;background:#4a1d27;color:#ffe3e3;font-size:16px;line-height:1.55;border-bottom:2px solid #d4505a}
+#warn.on{display:block}
+#warn b{color:#fff}
+#warn ol{margin:8px 0 0;padding-left:22px}
+#warn li{margin:4px 0}
+@media (max-width:700px){
+  #bar{gap:8px 10px;padding:10px}
+  #bar label{font-size:15px}
+  #bar button{padding:11px 14px;font-size:16px}
+  #bar select{padding:8px 10px;font-size:16px}
+  #go{flex:1 1 100%;font-size:18px;padding:14px}
+  #pip{display:none}
+  #status{flex:1 1 100%;margin-left:0;font-size:15px}
+  #bar input[type=range]{width:120px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <button id="go">자막 시작</button>
+    <label>위치
+      <select id="pos">
+        <option value="top">상단</option>
+        <option value="bottom">하단</option>
+        <option value="left">왼쪽</option>
+        <option value="right">오른쪽</option>
+      </select>
+    </label>
+    <label>자막 영역 <input id="sz" type="range" min="15" max="100" value="30"></label>
+    <label>글자 크기 <input id="fs" type="range" min="24" max="140" value="56"></label>
+    <label>글자색
+      <select id="fg">
+        <option value="#ffffff">흰색</option>
+        <option value="#ffe14d">노랑</option>
+        <option value="#7dffb2">연두</option>
+        <option value="#000000">검정</option>
+      </select>
+    </label>
+    <label>배경
+      <select id="bg">
+        <option value="#000000">검정</option>
+        <option value="#0d2a5c">남색</option>
+        <option value="#00b140">초록(크로마키)</option>
+        <option value="#ffffff">흰색</option>
+      </select>
+    </label>
+    <button id="clr">지우기</button>
+    <button id="pip">항상 위 창</button>
+    <button id="full">전체화면</button>
+    <button id="hide">메뉴 숨기기</button>
+    <button id="inst" hidden>앱으로 설치</button>
+    <span id="status">대기 중</span>
+  </div>
+  <div id="warn"></div>
+  <div id="stage">
+    <div class="hint">‘자막 시작’을 누르고 마이크 사용을 허용해 주세요.<br>메뉴를 숨겼다면 오른쪽 위 Chloe 1st build 버튼이나 키보드 H 키로 다시 열 수 있어요.</div>
+    <div id="cap" class="top"></div>
+  </div>
+</div>
+
+<button id="show" type="button">Chloe 1st build</button>
+<script>
+const $ = id => document.getElementById(id);
+const cap = $('cap'), bar = $('bar'), stage = $('stage'), go = $('go'), statusEl = $('status');
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const LOCAL_FILE = location.protocol === 'content:' || location.protocol === 'file:';
+
+/* 마이크 안내 */
+function micHelp(){
+  const w = $('warn');
+  if (LOCAL_FILE){
+    w.innerHTML = '<b>파일을 직접 열면 마이크 허용이 기억되지 않아요.</b><br>그래서 자막을 시작할 때마다 허용 창이 다시 떠요. 받은 <b>https:// 인터넷 주소</b>로 열거나, 그 주소에서 <b>앱으로 설치</b>해서 쓰세요.';
+  } else {
+    w.innerHTML = '<b>마이크 허용 방법</b><ol><li>주소창 왼쪽 아이콘을 눌러요.</li><li><b>권한</b> 또는 <b>마이크</b>를 눌러 <b>허용</b>으로 바꿔요.</li><li>휴대폰에서 그래도 안 되면 ⋮ 메뉴 → 설정 → 사이트 설정 → 마이크에서 이 사이트를 허용으로 바꿔요.</li><li>페이지를 새로고침하고 자막 시작을 다시 눌러요.</li></ol>';
+  }
+  w.classList.add('on');
+}
+
+/* 설정 저장·복원 */
+const keys = ['pos','sz','fs','fg','bg'];
+function load(){ try{ const s = JSON.parse(localStorage.getItem('capSet')||'{}'); keys.forEach(k=>{ if(s[k]) $(k).value = s[k]; }); }catch(e){} }
+function save(){ try{ const s={}; keys.forEach(k=>s[k]=$(k).value); localStorage.setItem('capSet', JSON.stringify(s)); }catch(e){} }
+function apply(){
+  cap.className = $('pos').value + (cap.classList.contains('float') ? ' float' : '');
+  cap.style.setProperty('--sz', $('sz').value + '%');
+  cap.style.setProperty('--fs', $('fs').value + 'px');
+  cap.style.setProperty('--fg', $('fg').value);
+  cap.style.setProperty('--bg', $('bg').value);
+  save();
+}
+keys.forEach(k => $(k).addEventListener('input', apply));
+load(); apply();
+
+/* 자막 표시 */
+let finals = [], interim = '';
+function render(){
+  cap.textContent = '';
+  finals.slice(-12).forEach(t => { const p = document.createElement('p'); p.textContent = t; cap.appendChild(p); });
+  if (interim){ const p = document.createElement('p'); p.className = 'interim'; p.textContent = interim; cap.appendChild(p); }
+}
+function setStatus(msg, isErr){ statusEl.textContent = msg; statusEl.className = isErr ? 'err' : ''; }
+
+/* 문장부호: 말로 입력(물음표·느낌표·마침표·쉼표) + 어미 보고 물음표 자동 */
+function spoken(t){
+  return t
+    .replace(/\s*물음\s?표\s*/g, '? ')
+    .replace(/\s*느낌\s?표\s*/g, '! ')
+    .replace(/\s*마침\s?표\s*/g, '. ')
+    .replace(/\s*쉼\s?표\s*/g, ', ')
+    .replace(/\s+([?.!,])/g, '$1');
+}
+const Q_END = /(까요|까|나요|니|냐|가요|인가|는가|ㄴ가|죠|지요|알겠어|어때|뭐야|뭐예요|누구야)$/;
+function auto(t){
+  t = t.trim();
+  if (!t || /[?.!,]$/.test(t)) return t;
+  return Q_END.test(t) ? t + '?' : t;
+}
+
+/* 마이크 권한: 시작 전에 한 번만 받아 두고, 거부된 상태면 허용 창을 반복해서 띄우지 않는다 */
+async function ensureMic(){
+  try{
+    if (navigator.permissions){
+      const st = await navigator.permissions.query({ name: 'microphone' });
+      if (st.state === 'granted') return true;
+      if (st.state === 'denied'){ micHelp(); return false; }
+    }
+  }catch(e){}
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    s.getTracks().forEach(t => t.stop());   // 권한만 받고 마이크는 바로 놓아 준다 (음성 인식이 쓸 수 있게)
+    return true;
+  }catch(e){
+    if (e.name === 'NotFoundError'){ setStatus('마이크를 찾지 못했어요. 마이크 연결을 확인해 주세요.', true); return false; }
+    if (e.name === 'NotAllowedError' || e.name === 'SecurityError'){ micHelp(); setStatus('마이크를 쓸 수 없어요. 위 안내를 확인해 주세요.', true); return false; }
+    return true;
+  }
+}
+
+/* 화면 꺼짐 방지 (휴대폰·태블릿이 잠기면 자막도 멈춤) */
+let lock = null;
+async function keepAwake(on){
+  try{
+    if (on && 'wakeLock' in navigator && !lock){
+      lock = await navigator.wakeLock.request('screen');
+      lock.addEventListener('release', () => { lock = null; });
+    } else if (!on && lock){ await lock.release(); lock = null; }
+  }catch(e){}
+}
+
+/* 음성 인식 */
+let rec = null, running = false, fails = 0;
+function setIdle(){ running = false; go.textContent = '자막 시작'; go.classList.remove('on'); keepAwake(false); }
+function restart(){
+  if (!running) return;
+  try{ rec.start(); }
+  catch(e){ if (e.name !== 'InvalidStateError') setTimeout(restart, 1000); }
+}
+function build(){
+  rec = new SR();
+  rec.lang = 'ko-KR';
+  rec.continuous = !/Android/i.test(navigator.userAgent);
+  rec.interimResults = true;
+  rec.onresult = e => {
+    fails = 0;
+    interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const r = e.results[i];
+      if (r.isFinal){ const t = auto(spoken(r[0].transcript).trim()); if (t) finals.push(t); }
+      else interim += spoken(r[0].transcript);
+    }
+    if (finals.length > 40) finals = finals.slice(-40);
+    render();
+    if (statusEl.className === 'err') setStatus('듣고 있어요');
+  };
+  rec.onerror = e => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+      setIdle();   // 다시 시작하지 않아야 허용 창이 계속 뜨지 않는다
+      setStatus('마이크를 쓸 수 없어요. 위 안내를 확인해 주세요.', true); micHelp();
+      return;
+    }
+    fails++;
+    if (e.error === 'network') setStatus('인터넷 연결을 확인해 주세요. 연결되면 자동으로 이어져요.', true);
+    else if (e.error === 'audio-capture') setStatus('다른 프로그램이 마이크를 쓰고 있어요. 그 프로그램을 닫아 주세요.', true);
+    else setStatus('오류: ' + e.error, true);
+  };
+  rec.onend = () => {
+    if (running) setTimeout(restart, Math.min(250 * 2 ** fails, 5000));   // 오류가 이어지면 점점 천천히 다시 시도
+  };
+}
+async function start(){
+  if (!SR){ setStatus('이 브라우저는 음성 인식을 지원하지 않아요. 크롬이나 엣지에서 열어 주세요.', true); return; }
+  go.disabled = true;
+  const ok = await ensureMic();
+  go.disabled = false;
+  if (!ok) return;
+  if (!rec) build();
+  running = true; fails = 0;
+  try{ rec.start(); }catch(e){}
+  go.textContent = '자막 중지'; go.classList.add('on');
+  setStatus('듣고 있어요');
+  if (!LOCAL_FILE) $('warn').classList.remove('on');
+  stage.querySelector('.hint').style.display = 'none';
+  keepAwake(true);
+}
+function stop(){
+  setIdle();
+  if (rec) try{ rec.stop(); }catch(e){}
+  setStatus('대기 중');
+}
+go.onclick = () => running ? stop() : start();
+$('clr').onclick = () => { finals = []; interim = ''; render(); };
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && running){ keepAwake(true); restart(); }
+});
+
+/* 전체화면·설정 숨기기 */
+$('full').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(()=>{});
+};
+function setBar(hidden){
+  bar.classList.toggle('hide', hidden);
+  $('show').style.display = hidden ? 'block' : 'none';
+}
+$('hide').onclick = () => setBar(true);
+$('show').onclick = () => setBar(false);
+document.addEventListener('keydown', e => {
+  if ((e.key === 'h' || e.key === 'H') && !/SELECT|INPUT/.test(document.activeElement.tagName)) setBar(!bar.classList.contains('hide'));
+});
+
+/* 항상 위 창 (다른 창 위에 떠 있는 작은 자막 창) */
+$('pip').onclick = async () => {
+  if (!window.documentPictureInPicture){
+    setStatus('항상 위 창은 최신 크롬·엣지에서만 돼요.', true); return;
+  }
+  try{
+    const w = await documentPictureInPicture.requestWindow({ width: 900, height: 300 });
+    document.querySelectorAll('style').forEach(s => w.document.head.appendChild(s.cloneNode(true)));
+    w.document.body.style.margin = '0';
+    cap.classList.add('float');
+    w.document.body.appendChild(cap);
+    const fit = () => cap.style.setProperty('--fs', Math.max(18, Math.min(w.innerHeight * 0.32, w.innerWidth / 9)) + 'px');
+    fit();
+    w.addEventListener('resize', fit);
+    w.addEventListener('pagehide', () => { cap.classList.remove('float'); stage.appendChild(cap); apply(); });
+  }catch(e){ setStatus('항상 위 창을 열지 못했어요.', true); }
+};
+
+/* 앱으로 설치 (PC 크롬·엣지, 안드로이드 크롬) */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('inst').hidden = false; });
+window.addEventListener('appinstalled', () => { installEvt = null; $('inst').hidden = true; });
+$('inst').onclick = async () => {
+  if (!installEvt) return;
+  installEvt.prompt();
+  await installEvt.userChoice;
+  installEvt = null; $('inst').hidden = true;
+};
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+if (!SR) setStatus('크롬이나 엣지에서 열어 주세요.', true);
+if (LOCAL_FILE) micHelp();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "실시간 자막",
+  "short_name": "실시간 자막",
+  "description": "말하는 내용을 화면에 바로 자막으로 띄워 주는 수업용 자막 앱",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10141c",
+  "theme_color": "#1a2030",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
