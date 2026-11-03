@@ -148,6 +148,8 @@ function apply(){
   save();
 }
 keys.forEach(k => $(k).addEventListener('input', apply));
+// 처음 쓰는 휴대폰은 글자를 줄이고 자막 영역을 넓혀, 앞 문장이 바로 밀려 올라가지 않게 한다
+if (!localStorage.getItem('capSet') && innerWidth < 700){ $('fs').value = 32; $('sz').value = 50; }
 load(); apply();
 
 /* 자막 표시 */
@@ -250,6 +252,8 @@ function build(){
     else setStatus('오류: ' + e.error, true);
   };
   rec.onend = () => {
+    // 휴대폰은 확정 결과 없이 끝나는 일이 있어, 보이던 글자가 사라지지 않게 남겨 둔다
+    if (interim.trim()){ finals.push(auto(interim)); interim = ''; render(); }
     if (running) setTimeout(restart, Math.min(250 * 2 ** fails, 5000));   // 오류가 이어지면 점점 천천히 다시 시도
   };
 }
