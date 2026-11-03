@@ -1,5 +1,5 @@
 /* 앱 껍데기를 저장해 두고, 인터넷이 되면 항상 새 버전을 먼저 받는다 (음성 인식 자체는 인터넷이 필요) */
-const CACHE = 'caption-v1';
+const CACHE = 'caption-v2';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png'];
 
 self.addEventListener('install', e => {
